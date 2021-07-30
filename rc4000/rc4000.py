@@ -8,6 +8,7 @@ from __future__ import print_function
 
 import logging
 import sys
+from copy import copy
 from enum import Enum
 
 from serial import Serial, EIGHTBITS, STOPBITS_ONE, PARITY_NONE
@@ -33,6 +34,11 @@ class DeviceState:
     pin: int
 
 
+class CallbackWaitCommand(Enum):
+    next: str = "next"
+    getpn: str = "getpn"
+
+
 class SIMSerialClient:
     def __init__(self, port: str, baudrate: int, authpin: int = 1111):
         self._ser = Serial(
@@ -47,42 +53,72 @@ class SIMSerialClient:
         self.state = DeviceState()
         self.state.pin = authpin
 
+        self.callback_state = CallbackWaitCommand.next
+        self.callback_lines = []
+
     def cmd_callback(self, line: bytes):
         log.debug("callback line='%s'" % line)
+
         if line == b"+GT: READY":
             self.on_ready()
             # called after reboot
             self.gt_info()
+
         elif line.startswith(b'+GETDEV: '):
             model = line.replace(b"+GETDEV: ", b"")
             self.on_getdev(model)
+
         elif line.startswith(b"+REB: "):
             self.on_reboot()
+
         elif line.startswith(b"+GTINCALL: "):
             phone = line.replace(b"+GTINCALL: ", b"")
             self.on_incall(phone)
+
         elif line.startswith(b"+GT: CALL DIS"):
             self.on_callend()
+
         elif line == b"+GTLOAD: 1":
             self.on_loadon()
+
         elif line == b"+GTLOAD: 0":
             self.on_loadoff()
+
         elif line.startswith(b"+GTWRPN: "):
             phone = line.replace(b"+GTINCALL: ", b"")
             log.debug("new number: %s", phone)
             self.gt_info()
+
         elif line.startswith(b"+GETMD: "):
             mode = line.replace(b"+GETMD: ", b"")
             self.on_getmd(mode)
 
+        elif line.startswith(b"+GETPN: "):
+            self.on_phonebook(copy(self.callback_lines))
+            self.callback_state = CallbackWaitCommand.next
+            self.callback_lines = []
+
         elif line.startswith(b"+AUTH: "):
             result = line.replace(b"+AUTH: ", b"")
             self.on_auth(result)
+
         elif line.startswith(b"+GTSMS: "):
             sms = line.replace(b"+GTINCALL: ", b"")
             self.on_sms(sms)
         else:
-            log.error("unknown %s", line)
+            if self.callback_state != CallbackWaitCommand.next:
+                log.debug("callback line++ '%s'", line)
+                self.callback_lines.append(line)
+            else:
+                log.error("unknown callback '%s'", line)
+
+    def gt_pn(self, position: int = 0):
+        """
+        reads interlan phonebook starting from `position`.
+        Position is stepping every time +8. 8 bytes per number?
+        """
+        self.callback_state = CallbackWaitCommand.getpn
+        self.gt_sendcmd(b"GT+GETPN=%s,10" % str(position).encode())
 
     def gt_auth(self, pin: int):
         self.gt_sendcmd(b"GT+AUTH=%s" % str(pin).encode())
@@ -108,6 +144,9 @@ class SIMSerialClient:
 
     def on_sms(self, sms):
         log.debug("in sms: %s", sms)
+
+    def on_phonebook(self, phonebook):
+        log.debug("on_phonebook: %s", phonebook)
 
     def on_auth(self, result):
         if result == b"1":
@@ -171,6 +210,7 @@ class SIMSerialClient:
 def main(port: str = "/dev/cu.usbserial-401210", baudrate: int = 115200):
     simcli = SIMSerialClient(port=port, baudrate=baudrate, authpin=8042)
     simcli.gt_auth(8052)
+    simcli.gt_pn(0)
     simcli.loop()
 
 
