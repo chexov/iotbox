@@ -7,6 +7,7 @@
 from __future__ import print_function
 
 import logging
+import sys
 from enum import Enum
 
 from serial import Serial, EIGHTBITS, STOPBITS_ONE, PARITY_NONE
@@ -165,4 +166,6 @@ def main(port: str = "/dev/cu.usbserial-401210", baudrate: int = 115200):
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1:
+        port = sys.argv[1]
+    main(port=port)
