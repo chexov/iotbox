@@ -91,6 +91,9 @@ class SIMSerialClient:
         log.debug("sending '%s'", cmd)
         self._ser.write(cmd + b"\r\n")
 
+    def gt_reb(self):
+        self.gt_sendcmd(b"GT+REB")
+
     def gt_getmd(self):
         self.gt_sendcmd(b"GT+GETMD")
 
