@@ -11,6 +11,7 @@ import sys
 from collections import deque
 from copy import copy
 from enum import Enum
+from typing import List
 
 from serial import Serial, EIGHTBITS, STOPBITS_ONE, PARITY_NONE
 
@@ -39,6 +40,18 @@ class CallbackWaitCommand(Enum):
     next: str = "next"
     getpn: str = "getpn"
     getinfo: str = "getinfo"
+
+
+class SimCmd:
+    pass
+
+
+class GTInfoSIMCmd(SimCmd):
+    callback_prefix = b"+GTINFO: "
+    cmd = b"GT+INFO"
+
+    def on_callback(self, lines: List[bytes]):
+        log.debug("on_getinfo: %s", lines)
 
 
 class SIMSerialClient:
@@ -71,7 +84,7 @@ class SIMSerialClient:
             self.on_getdev(model)
 
         elif line.startswith(b"+GTINFO: "):
-            self.on_getinfo(copy(self.callback_lines))
+            self.on_gtinfo(copy(self.callback_lines))
             log.debug("getinfo popleft %s", self.callback_cmd_queue.popleft())
             self.callback_lines = []
 
@@ -156,7 +169,7 @@ class SIMSerialClient:
     def on_phonebook(self, phonebook):
         log.debug("on_phonebook: %s", phonebook)
 
-    def on_getinfo(self, infolines):
+    def on_gtinfo(self, infolines):
         log.debug("on_getinfo: %s", infolines)
 
     def on_auth(self, result):
