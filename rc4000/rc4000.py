@@ -70,8 +70,8 @@ class SIMSerialClient:
             self.on_getdev(model)
 
         elif line.startswith(b"+GTINFO: "):
-            self.callbackwait_state = CallbackWaitCommand.next
             self.on_getinfo(copy(self.callback_lines))
+            self.callbackwait_state = CallbackWaitCommand.next
             self.callback_lines = []
 
         elif line.startswith(b"+REB: "):
