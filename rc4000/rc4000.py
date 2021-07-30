@@ -48,7 +48,7 @@ class SIMSerialClient:
         self.state.pin = authpin
 
     def cmd_callback(self, line: bytes):
-        print("line=%s" % line)
+        log.debug("callback line='%s'" % line)
         if line == b"+GT: READY":
             self.on_ready()
             # called after reboot
