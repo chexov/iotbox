@@ -82,7 +82,7 @@ class SIMSerialClient:
             log.error("unknown %s", line)
 
     def gt_auth(self, pin: int):
-        self.gt_sendcmd(b"GT+AUTH=%s" % str(pin))
+        self.gt_sendcmd(b"GT+AUTH=%s" % str(pin).encode())
 
     def gt_info(self):
         self.gt_sendcmd(b"GT+INFO")
