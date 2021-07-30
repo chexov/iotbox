@@ -8,6 +8,7 @@ from __future__ import print_function
 
 import logging
 import sys
+from collections import deque
 from copy import copy
 from enum import Enum
 
@@ -54,8 +55,8 @@ class SIMSerialClient:
         self.state = DeviceState()
         self.state.pin = authpin
 
-        self.callbackwait_state = CallbackWaitCommand.next
         self.callback_lines = []
+        self.callback_cmd_queue = deque()  # effectively buffer for queued commands
 
     def cmd_callback(self, line: bytes):
         log.debug("callback line='%s'" % line)
@@ -71,7 +72,7 @@ class SIMSerialClient:
 
         elif line.startswith(b"+GTINFO: "):
             self.on_getinfo(copy(self.callback_lines))
-            self.callbackwait_state = CallbackWaitCommand.next
+            log.debug("getinfo popleft %s", self.callback_cmd_queue.popleft())
             self.callback_lines = []
 
         elif line.startswith(b"+REB: "):
@@ -101,7 +102,7 @@ class SIMSerialClient:
 
         elif line.startswith(b"+GETPN: "):
             self.on_phonebook(copy(self.callback_lines))
-            self.callbackwait_state = CallbackWaitCommand.next
+            log.debug("getpn popleft %s", self.callback_cmd_queue.popleft())
             self.callback_lines = []
 
         elif line.startswith(b"+AUTH: "):
@@ -112,7 +113,7 @@ class SIMSerialClient:
             sms = line.replace(b"+GTINCALL: ", b"")
             self.on_sms(sms)
         else:
-            if self.callbackwait_state != CallbackWaitCommand.next:
+            if self.callback_cmd_queue:
                 log.debug("callback line++ '%s'", line)
                 self.callback_lines.append(line)
             else:
@@ -123,14 +124,14 @@ class SIMSerialClient:
         reads interlan phonebook starting from `position`.
         Position is stepping every time +8. 8 bytes per number?
         """
-        self.callbackwait_state = CallbackWaitCommand.getpn
+        self.callback_cmd_queue.append(CallbackWaitCommand.getpn)
         self.gt_sendcmd(b"GT+GETPN=%s,10" % str(position).encode())
 
     def gt_auth(self, pin: int):
         self.gt_sendcmd(b"GT+AUTH=%s" % str(pin).encode())
 
     def gt_info(self):
-        self.callbackwait_state = CallbackWaitCommand.getinfo
+        self.callback_cmd_queue.append(CallbackWaitCommand.getinfo)
         self.gt_sendcmd(b"GT+INFO")
 
     def gt_sendcmd(self, cmd: bytes):
