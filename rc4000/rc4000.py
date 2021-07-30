@@ -49,10 +49,13 @@ class SIMSerialClient:
 
     def cmd_callback(self, line: bytes):
         print("line=%s" % line)
-        if line == "GT: READY":
+        if line == b"+GT: READY":
+            self.on_ready()
+            # called after reboot
             self.gt_info()
-        elif line == b'+GETDEV: "RC-4000"':
-            self.on_getdev()
+        elif line.startswith(b'+GETDEV: '):
+            model = line.replace(b"+GETDEV: ", b"")
+            self.on_getdev(model)
         elif line.startswith(b"+REB: "):
             self.on_reboot()
         elif line.startswith(b"+GTINCALL: "):
@@ -139,8 +142,11 @@ class SIMSerialClient:
     def on_reboot(self):
         log.debug("rebooting")
 
-    def on_getdev(self):
-        log.debug("found rc-4000")
+    def on_ready(self):
+        log.debug("ready")
+
+    def on_getdev(self, model: bytes):
+        log.debug("found model %s" % model)
 
     def loop(self):
         line: bytes = b""
