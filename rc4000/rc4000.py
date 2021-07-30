@@ -37,6 +37,7 @@ class DeviceState:
 class CallbackWaitCommand(Enum):
     next: str = "next"
     getpn: str = "getpn"
+    getinfo: str = "getinfo"
 
 
 class SIMSerialClient:
@@ -53,7 +54,7 @@ class SIMSerialClient:
         self.state = DeviceState()
         self.state.pin = authpin
 
-        self.callback_state = CallbackWaitCommand.next
+        self.callbackwait_state = CallbackWaitCommand.next
         self.callback_lines = []
 
     def cmd_callback(self, line: bytes):
@@ -67,6 +68,11 @@ class SIMSerialClient:
         elif line.startswith(b'+GETDEV: '):
             model = line.replace(b"+GETDEV: ", b"")
             self.on_getdev(model)
+
+        elif line.startswith(b"+GTINFO: "):
+            self.callbackwait_state = CallbackWaitCommand.next
+            self.on_getinfo(copy(self.callback_lines))
+            self.callback_lines = []
 
         elif line.startswith(b"+REB: "):
             self.on_reboot()
@@ -95,7 +101,7 @@ class SIMSerialClient:
 
         elif line.startswith(b"+GETPN: "):
             self.on_phonebook(copy(self.callback_lines))
-            self.callback_state = CallbackWaitCommand.next
+            self.callbackwait_state = CallbackWaitCommand.next
             self.callback_lines = []
 
         elif line.startswith(b"+AUTH: "):
@@ -106,7 +112,7 @@ class SIMSerialClient:
             sms = line.replace(b"+GTINCALL: ", b"")
             self.on_sms(sms)
         else:
-            if self.callback_state != CallbackWaitCommand.next:
+            if self.callbackwait_state != CallbackWaitCommand.next:
                 log.debug("callback line++ '%s'", line)
                 self.callback_lines.append(line)
             else:
@@ -117,13 +123,14 @@ class SIMSerialClient:
         reads interlan phonebook starting from `position`.
         Position is stepping every time +8. 8 bytes per number?
         """
-        self.callback_state = CallbackWaitCommand.getpn
+        self.callbackwait_state = CallbackWaitCommand.getpn
         self.gt_sendcmd(b"GT+GETPN=%s,10" % str(position).encode())
 
     def gt_auth(self, pin: int):
         self.gt_sendcmd(b"GT+AUTH=%s" % str(pin).encode())
 
     def gt_info(self):
+        self.callbackwait_state = CallbackWaitCommand.getinfo
         self.gt_sendcmd(b"GT+INFO")
 
     def gt_sendcmd(self, cmd: bytes):
@@ -147,6 +154,9 @@ class SIMSerialClient:
 
     def on_phonebook(self, phonebook):
         log.debug("on_phonebook: %s", phonebook)
+
+    def on_getinfo(self, infolines):
+        log.debug("on_getinfo: %s", infolines)
 
     def on_auth(self, result):
         if result == b"1":
